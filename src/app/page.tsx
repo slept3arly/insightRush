@@ -52,9 +52,10 @@ export default function Home() {
         headers: { "Content-Type": "multipart/form-data" }
       });
       setResults(res.data);
-    } catch (error) {
-      console.error("Error executing query", error);
-      alert("Failed to run query. Make sure the backend API is running.");
+    } catch (error: any) {
+      console.error("Error executing query:", error);
+      const errorDetail = error.response?.data?.detail || "Make sure the backend API is running.";
+      alert(`Failed to run query: ${errorDetail}`);
     }
     setLoading(false);
   };
@@ -297,7 +298,7 @@ export default function Home() {
                           <Tooltip 
                             cursor={{fill: 'rgba(0,0,0,0.05)'}}
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            formatter={(value: number) => [`${value} ms`]}
+                            formatter={(value: any) => [`${value} ms`]}
                           />
                           <Legend wrapperStyle={{ paddingTop: '20px' }} />
                           <Bar dataKey="Exact" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={80} />

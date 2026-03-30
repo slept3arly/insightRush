@@ -1,59 +1,63 @@
 "use client"
 
 import * as React from "react"
-import { Slider as SliderPrimitive } from "@base-ui/react/slider"
-
 import { cn } from "@/lib/utils"
 
-function Slider({
-  className,
-  defaultValue,
-  value,
-  min = 0,
-  max = 100,
-  ...props
-}: SliderPrimitive.Root.Props) {
-  const _values = React.useMemo(
-    () =>
-      Array.isArray(value)
-        ? value
-        : Array.isArray(defaultValue)
-          ? defaultValue
-          : [min, max],
-    [value, defaultValue, min, max]
-  )
-
-  return (
-    <SliderPrimitive.Root
-      className={cn("data-horizontal:w-full data-vertical:h-full", className)}
-      data-slot="slider"
-      defaultValue={defaultValue}
-      value={value}
-      min={min}
-      max={max}
-      thumbAlignment="edge"
-      {...props}
-    >
-      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
-        <SliderPrimitive.Track
-          data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
-        >
-          <SliderPrimitive.Indicator
-            data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
-          />
-        </SliderPrimitive.Track>
-        {Array.from({ length: _values.length }, (_, index) => (
-          <SliderPrimitive.Thumb
-            data-slot="slider-thumb"
-            key={index}
-            className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
-          />
-        ))}
-      </SliderPrimitive.Control>
-    </SliderPrimitive.Root>
-  )
+interface SliderProps {
+  className?: string
+  defaultValue?: number[]
+  value?: number[]
+  min?: number
+  max?: number
+  step?: number
+  onValueChange?: (value: number[]) => void
 }
+
+const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
+  ({ className, defaultValue, value, min = 0, max = 100, step = 1, onValueChange, ...props }, ref) => {
+    
+    // Support array-based values from the existing API
+    const initialValue = value ? value[0] : (defaultValue ? defaultValue[0] : min)
+    const [localValue, setLocalValue] = React.useState(initialValue)
+
+    // Sync with external value if it changes
+    React.useEffect(() => {
+      if (value !== undefined) {
+        setLocalValue(value[0])
+      }
+    }, [value])
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = Number(e.target.value)
+      setLocalValue(newValue)
+      if (onValueChange) {
+        onValueChange([newValue])
+      }
+    }
+
+    return (
+      <div className={cn("relative flex w-full touch-none items-center select-none", className)}>
+        <input
+          type="range"
+          ref={ref}
+          min={min}
+          max={max}
+          step={step}
+          value={localValue}
+          onChange={handleChange}
+          className={cn(
+            "h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 active:accent-indigo-700 disabled:cursor-not-allowed disabled:opacity-50",
+            // Custom thumb styling via pseudo-elements
+            "[&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-indigo-600 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125 [&::-webkit-slider-thumb]:cursor-grab active:[&::-webkit-slider-thumb]:cursor-grabbing",
+            "[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-indigo-600 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:transition-all hover:[&::-moz-range-thumb]:scale-110 active:[&::-moz-range-thumb]:scale-125 [&::-moz-range-thumb]:cursor-grab active:[&::-moz-range-thumb]:cursor-grabbing"
+          )}
+          {...props}
+        />
+      </div>
+    )
+  }
+)
+
+Slider.displayName = "Slider"
 
 export { Slider }
