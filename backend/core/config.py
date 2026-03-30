@@ -1,0 +1,14 @@
+class Config:
+    DEFAULT_CONFIDENCE = 0.95
+    DEFAULT_TARGET_ERROR = 0.05
+
+    SMALL_TABLE_THRESHOLD = 100_000
+
+    MAX_SAMPLE_FRACTION = 0.1
+    MIN_SAMPLE_FRACTION = 0.01
+
+    Z_SCORES = {
+        0.90: 1.645,
+        0.95: 1.96,
+        0.99: 2.576
+    }
