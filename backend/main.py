@@ -2,12 +2,13 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io
+import hashlib
+import duckdb
 
 from backend.utils import compute_exact, compute_approx, calculate_error, get_fraction
 
 app = FastAPI(title="InsightRush AQP Engine")
 
-# CORS configuration for frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,19 +18,60 @@ app.add_middleware(
 )
 
 # -------------------------
-# HELPER: CASE-INSENSITIVE COLUMN MATCH
+# GLOBAL CACHES
+# -------------------------
+TABLE_CACHE = {}   # file_hash -> table_name
+DF_CACHE = {}      # file_hash -> df (for validation only)
+
+from backend.db import conn
+
+
+# -------------------------
+# HASHING
+# -------------------------
+def get_file_hash(contents: bytes):
+    return hashlib.md5(contents).hexdigest()
+
+
+# -------------------------
+# COLUMN RESOLUTION
 # -------------------------
 def resolve_column(df, col_name: str):
     if not col_name:
         return None
-    
+
     col_name = col_name.strip()
     matches = [c for c in df.columns if c.lower() == col_name.lower()]
-    
+
     if not matches:
         raise HTTPException(status_code=400, detail=f"Column '{col_name}' not found")
-    
+
     return matches[0]
+
+
+# -------------------------
+# LOAD + CACHE TABLE
+# -------------------------
+def get_or_create_table(contents: bytes):
+    file_hash = get_file_hash(contents)
+
+    # Already cached
+    if file_hash in TABLE_CACHE:
+        return TABLE_CACHE[file_hash], DF_CACHE[file_hash]
+
+    # Load dataframe once
+    df = pd.read_csv(io.BytesIO(contents), low_memory=False)
+
+    table_name = f"table_{file_hash}"
+
+    # Create persistent DuckDB table (FAST REUSE)
+    conn.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
+
+    # Cache both
+    TABLE_CACHE[file_hash] = table_name
+    DF_CACHE[file_hash] = df
+
+    return table_name, df
 
 
 # -------------------------
@@ -45,19 +87,16 @@ async def process_query(
 ):
     try:
         contents = await file.read()
-        df = pd.read_csv(io.BytesIO(contents))
 
-        # Convert accuracy → fraction
+        table_name, df = get_or_create_table(contents)
+
         fraction = get_fraction(accuracy)
 
-        # -------------------------
-        # VALIDATION
-        # -------------------------
-
+        # VALIDATION (use df, not DuckDB)
         if query_type in ["SUM", "AVG", "GROUP_BY_SUM"]:
             if not column:
                 raise HTTPException(status_code=400, detail="Column is required")
-            
+
             column = resolve_column(df, column)
 
             if not pd.api.types.is_numeric_dtype(df[column]):
@@ -69,25 +108,14 @@ async def process_query(
         if query_type == "GROUP_BY_SUM":
             if not group_by:
                 raise HTTPException(status_code=400, detail="group_by is required")
-            
+
             group_by = resolve_column(df, group_by)
 
-        # -------------------------
-        # EXECUTION
-        # -------------------------
-
-        exact_val, exact_time = compute_exact(df, query_type, column, group_by)
-        approx_val, approx_time = compute_approx(df, query_type, fraction, column, group_by)
-
-        # -------------------------
-        # METRICS
-        # -------------------------
+        # EXECUTION (DuckDB table-based)
+        exact_val, exact_time = compute_exact(table_name, query_type, column, group_by)
+        approx_val, approx_time = compute_approx(table_name, query_type, fraction, column, group_by)
 
         error = calculate_error(exact_val, approx_val)
-
-        # -------------------------
-        # RESPONSE
-        # -------------------------
 
         return {
             "query": {
@@ -129,16 +157,14 @@ async def benchmark_query(
 ):
     try:
         contents = await file.read()
-        df = pd.read_csv(io.BytesIO(contents))
 
-        # -------------------------
-        # VALIDATION (FIXED HERE)
-        # -------------------------
+        table_name, df = get_or_create_table(contents)
 
+        # VALIDATION
         if query_type in ["SUM", "AVG", "GROUP_BY_SUM"]:
             if not column:
                 raise HTTPException(status_code=400, detail="Column is required")
-            
+
             column = resolve_column(df, column)
 
             if not pd.api.types.is_numeric_dtype(df[column]):
@@ -150,21 +176,16 @@ async def benchmark_query(
         if query_type == "GROUP_BY_SUM":
             if not group_by:
                 raise HTTPException(status_code=400, detail="group_by is required")
-            
-            group_by = resolve_column(df, group_by)
 
-        # -------------------------
-        # BENCHMARK EXECUTION
-        # -------------------------
+            group_by = resolve_column(df, group_by)
 
         fractions = [0.05, 0.1, 0.25]
         results = []
 
-        # Exact once
-        exact_val, exact_time = compute_exact(df, query_type, column, group_by)
+        exact_val, exact_time = compute_exact(table_name, query_type, column, group_by)
 
         for fraction in fractions:
-            approx_val, approx_time = compute_approx(df, query_type, fraction, column, group_by)
+            approx_val, approx_time = compute_approx(table_name, query_type, fraction, column, group_by)
             error = calculate_error(exact_val, approx_val)
 
             results.append({
@@ -175,9 +196,7 @@ async def benchmark_query(
                 "speedup": (exact_time / approx_time) if approx_time > 0 else 0
             })
 
-        return {
-            "benchmark": results
-        }
+        return {"benchmark": results}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
