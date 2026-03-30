@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { 
   Card, 
@@ -29,13 +29,66 @@ import {
   ResponsiveContainer
 } from "recharts";
 
+// --- Types ---
+interface QueryResult {
+  exact: { value: number; time_ms: number };
+  approximate: { value: number; time_ms: number };
+  metrics: {
+    speedup: number;
+    error_percent: number | object;
+    fraction_used: number;
+  };
+}
+
+interface BenchmarkRow {
+  fraction: number;
+  time_ms: number;
+  error_percent: number | object;
+  speedup: number;
+}
+
+interface BenchmarkResponse {
+  benchmark: BenchmarkRow[];
+}
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [queryType, setQueryType] = useState("COUNT");
   const [column, setColumn] = useState("");
-  const [accuracyLevel, setAccuracyLevel] = useState([10]); // Slider uses array
-  const [results, setResults] = useState<any>(null);
+  const [accuracyLevel, setAccuracyLevel] = useState([10]);
+  const [results, setResults] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [benchmarkResults, setBenchmarkResults] = useState<BenchmarkResponse | null>(null);
+
+  // Clear results if file changes
+  useEffect(() => {
+    setResults(null);
+    setBenchmarkResults(null);
+  }, [file]);
+
+  const runBenchmark = async () => {
+    if (!file) return alert("Please upload a CSV file");
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("query_type", queryType);
+    if (column && queryType !== "COUNT") formData.append("column", column);
+
+    try {
+      const res = await axios.post("http://localhost:8000/benchmark", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      console.log("Benchmark response:", res.data);
+      setBenchmarkResults(res.data);
+      setResults(null);
+    } catch (error: any) {
+      console.error("Benchmark error:", error);
+      alert(error.response?.data?.detail || "Benchmark failed. Is the backend running?");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const runQuery = async () => {
     if (!file) return alert("Please upload a CSV file");
@@ -43,21 +96,22 @@ export default function Home() {
     
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("fraction", (accuracyLevel[0] / 100).toString());
+    formData.append("accuracy", accuracyLevel[0].toString());
     formData.append("query_type", queryType);
-    if (column) formData.append("column", column);
+    if (column && queryType !== "COUNT") formData.append("column", column);
 
     try {
       const res = await axios.post("http://localhost:8000/query", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       setResults(res.data);
+      setBenchmarkResults(null);
     } catch (error: any) {
       console.error("Error executing query:", error);
-      const errorDetail = error.response?.data?.detail || "Make sure the backend API is running.";
-      alert(`Failed to run query: ${errorDetail}`);
+      alert(error.response?.data?.detail || "Make sure the backend API is running.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const chartData = results ? [
@@ -82,7 +136,7 @@ export default function Home() {
             <p className="text-slate-500 text-lg mt-2 font-medium">Approximate Query Processing Engine</p>
           </div>
           <Badge variant="outline" className="text-sm px-4 py-1 bg-white shadow-sm border-slate-200">
-            Speed vs 100% Accuracy
+            Performance Monitor
           </Badge>
         </div>
 
@@ -134,7 +188,7 @@ export default function Home() {
                     <div className="space-y-2">
                       <Label>Target Column <span className="text-slate-400 text-xs font-normal">(for SUM/AVG)</span></Label>
                       <Input 
-                        placeholder="e.g. amount, price..."
+                        placeholder={queryType === "COUNT" ? "Not required for COUNT" : "e.g. amount, price..."}
                         value={column}
                         onChange={(e) => setColumn(e.target.value)}
                         disabled={queryType === "COUNT"}
@@ -168,22 +222,26 @@ export default function Home() {
                         className="py-4 cursor-pointer"
                       />
                       <p className="text-xs text-slate-500 leading-tight">
-                        Lower percentages provide exponentially faster results by estimating totals based on a random sample.
+                        Lower percentages provide faster results by estimating totals based on a random sample.
                       </p>
                     </div>
                   </CardContent>
-                  <CardFooter className="pt-0">
+                  <CardFooter className="pt-0 flex flex-col gap-3">
                     <Button 
                       onClick={runQuery} 
                       disabled={loading || !file}
                       className="w-full h-12 text-md font-semibold bg-indigo-600 hover:bg-indigo-700 transition"
                     >
-                      {loading ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Processing...
-                        </div>
-                      ) : "Run Query Comparison"}
+                      {loading ? "Processing..." : "Run Query Comparison"}
+                    </Button>
+
+                    <Button 
+                      onClick={runBenchmark}
+                      disabled={loading || !file}
+                      variant="secondary"
+                      className="w-full h-12 text-md font-semibold"
+                    >
+                      Run Benchmark Suite
                     </Button>
                   </CardFooter>
                 </Card>
@@ -192,15 +250,14 @@ export default function Home() {
               {/* Results Panel */}
               <div className="lg:col-span-8 space-y-6">
                 
-                {/* Result Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   
                   {/* Approximate Card */}
-                  <Card className="shadow-lg border-2 border-emerald-100 bg-emerald-50/20 relative overflow-hidden transition-all duration-500">
-                    {results?.speedup > 1 && (
-                      <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1">
+                  <Card className="shadow-lg border-2 border-emerald-100 bg-emerald-50/20 relative overflow-hidden">
+                    {results && results.metrics.speedup > 1 && (
+                      <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1 z-10">
                         <Zap className="h-3 w-3 fill-white" />
-                        {results.speedup.toFixed(1)}x Faster
+                        {results.metrics.speedup.toFixed(1)}x Faster
                       </div>
                     )}
                     <CardHeader>
@@ -219,7 +276,6 @@ export default function Home() {
                               ~{Number(results.approximate.value).toLocaleString(undefined, {maximumFractionDigits: 2})}
                             </div>
                           </div>
-                          
                           <div className="bg-white/60 p-3 rounded-lg border border-emerald-100 flex items-center justify-between">
                             <span className="flex items-center gap-2 text-slate-600 text-sm font-medium">
                               <Clock className="w-4 h-4" /> Execution Time
@@ -248,23 +304,22 @@ export default function Home() {
                     </CardHeader>
                     <CardContent>
                       {results ? (
-                         <div className="space-y-4">
-                         <div>
-                           <div className="text-sm text-slate-500 font-medium mb-1">True Value</div>
-                           <div className="text-5xl font-black text-slate-800 tracking-tight">
-                             {Number(results.exact.value).toLocaleString(undefined, {maximumFractionDigits: 2})}
-                           </div>
-                         </div>
-                         
-                         <div className="bg-white/60 p-3 rounded-lg border border-rose-100 flex items-center justify-between">
-                           <span className="flex items-center gap-2 text-slate-600 text-sm font-medium">
-                             <Clock className="w-4 h-4" /> Execution Time
-                           </span>
-                           <span className="font-mono font-bold text-rose-600">
-                             {results.exact.time_ms.toFixed(3)} ms
-                           </span>
-                         </div>
-                       </div>
+                        <div className="space-y-4">
+                          <div>
+                            <div className="text-sm text-slate-500 font-medium mb-1">True Value</div>
+                            <div className="text-5xl font-black text-slate-800 tracking-tight">
+                              {Number(results.exact.value).toLocaleString(undefined, {maximumFractionDigits: 2})}
+                            </div>
+                          </div>
+                          <div className="bg-white/60 p-3 rounded-lg border border-rose-100 flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-slate-600 text-sm font-medium">
+                              <Clock className="w-4 h-4" /> Execution Time
+                            </span>
+                            <span className="font-mono font-bold text-rose-600">
+                              {results.exact.time_ms.toFixed(3)} ms
+                            </span>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-[120px] flex items-center justify-center text-slate-400 italic">
                           Awaiting execution...
@@ -277,28 +332,19 @@ export default function Home() {
                 {/* Performance Chart */}
                 <Card className="shadow-lg border-0 h-96">
                   <CardHeader>
-                    <CardTitle className="text-slate-700">Performance Benchmark</CardTitle>
-                    <CardDescription>Time required to process the query (lower is better)</CardDescription>
+                    <CardTitle className="text-slate-700">Performance Comparison</CardTitle>
+                    <CardDescription>Execution time (lower is better)</CardDescription>
                   </CardHeader>
                   <CardContent className="h-72">
                     {results ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={chartData}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                        >
+                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.5} />
                           <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                          <YAxis 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tickFormatter={(value) => `${value}ms`}
-                            width={80}
-                          />
+                          <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `${v}ms`} />
                           <Tooltip 
                             cursor={{fill: 'rgba(0,0,0,0.05)'}}
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            formatter={(value: any) => [`${value} ms`]}
                           />
                           <Legend wrapperStyle={{ paddingTop: '20px' }} />
                           <Bar dataKey="Exact" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={80} />
@@ -306,19 +352,57 @@ export default function Home() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="w-[100%] h-full flex items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                        <p className="text-slate-400 font-medium font-sm flex items-center gap-2">
+                      <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                        <p className="text-slate-400 font-medium flex items-center gap-2">
                           <BarChartIcon className="h-5 w-5 opacity-50" />
-                          Run a query to view performance metrics
+                          Run a query to see the chart
                         </p>
                       </div>
                     )}
                   </CardContent>
                 </Card>
 
+                {/* Benchmark Results */}
+                {benchmarkResults && (
+                  <Card className="shadow-lg border-0">
+                    <CardHeader>
+                      <CardTitle className="text-slate-700">Benchmark Report</CardTitle>
+                      <CardDescription>Trade-off analysis across sample sizes</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="rounded-md border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50">
+                            <tr className="border-b">
+                              <th className="p-3 text-left font-semibold">Sample %</th>
+                              <th className="p-3 text-left font-semibold">Time (ms)</th>
+                              <th className="p-3 text-left font-semibold">Error %</th>
+                              <th className="p-3 text-left font-semibold">Speedup</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {benchmarkResults.benchmark.map((row, idx) => (
+                              <tr key={idx} className="border-b hover:bg-slate-50/50">
+                                <td className="p-3 font-medium">{(row.fraction * 100).toFixed(0)}%</td>
+                                <td className="p-3">{row.time_ms.toFixed(2)}</td>
+                                <td className="p-3">
+                                  {typeof row.error_percent === "number" 
+                                    ? `${row.error_percent.toFixed(2)}%` 
+                                    : "N/A"}
+                                </td>
+                                <td className="p-3 text-emerald-600 font-bold">{row.speedup.toFixed(2)}x</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </TabsContent>
+
           <TabsContent value="history">
             <Card className="shadow-lg border-0">
               <CardHeader>
@@ -327,7 +411,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <div className="h-64 flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                  <p>History feature coming soon!</p>
+                  <p>Session history will be recorded here.</p>
                 </div>
               </CardContent>
             </Card>
