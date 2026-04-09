@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# data files
+data/*.csv
+tmp/
+tmp_uploads/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -32,6 +37,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -43,3 +49,18 @@ next-env.d.ts
 # python
 __pycache__/
 *.py[cod]
+*.pyc
+*.pyo
+venv/
+.env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# logs
+logs/
+*.log

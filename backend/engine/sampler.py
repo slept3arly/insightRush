@@ -1,20 +1,15 @@
 class Sampler:
 
     @staticmethod
-    def apply_sampling(base_query: str, fraction: float):
-        # default (non-group)
+    def apply_sampling(table: str, fraction: float):
         return f"""
-            SELECT * FROM ({base_query})
-            USING SAMPLE {fraction * 100}% (BERNOULLI)
+            SELECT *
+            FROM {table}
+            USING SAMPLE {fraction * 100} PERCENT (BERNOULLI)
         """
 
     @staticmethod
     def apply_stratified_sampling(table: str, group_by: str, fraction: float):
-        """
-        Ensures each group contributes rows.
-        Uses row_number trick per group.
-        """
-
         return f"""
             SELECT *
             FROM (

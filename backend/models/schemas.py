@@ -5,7 +5,7 @@ from typing import Optional, Literal, Dict, Any
 class QueryRequest(BaseModel):
     table_name: str
 
-    query_type: Literal["COUNT", "SUM", "AVG"]
+    query_type: Literal["COUNT", "SUM", "AVG", "COUNT_DISTINCT"]
 
     column: Optional[str] = None
     group_by: Optional[str] = None

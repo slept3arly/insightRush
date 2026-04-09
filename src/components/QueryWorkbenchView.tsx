@@ -12,6 +12,8 @@ interface Props {
   setQueryType: (v: string) => void;
   column: string;
   setColumn: (v: string) => void;
+  groupBy: string;
+  setGroupBy: (v: string) => void;
   accuracyLevel: number;
   setAccuracyLevel: (v: number) => void;
   results: QueryResult | null;
@@ -24,11 +26,11 @@ interface Props {
 export default function QueryWorkbenchView(props: Props) {
   const {
     file, setFile, queryType, setQueryType, column, setColumn,
-    accuracyLevel, setAccuracyLevel, results, loading,
+    groupBy, setGroupBy, accuracyLevel, setAccuracyLevel, results, loading,
     benchmarkResults, runQuery, runBenchmark
   } = props;
 
-  const chartData = results ? [{
+  const chartData = results && typeof results.exact.value === 'number' ? [{
     name: "Execution Time",
     Exact: Number(results.exact.time_ms.toFixed(2)),
     Approximate: Number(results.approximate.time_ms.toFixed(2)),
@@ -98,19 +100,37 @@ export default function QueryWorkbenchView(props: Props) {
                 </select>
               </div>
 
-              <div>
-                <label className="text-[11px] font-medium uppercase tracking-wider block mb-2" style={{ color: "var(--on-surface-variant)" }}>
-                  Target Column <span style={{ color: "var(--outline)" }}>(SUM/AVG)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. column_name, amount, price..."
-                  value={column}
-                  onChange={(e) => setColumn(e.target.value)}
-                  className="kinetic-input w-full text-sm"
-                  style={{ background: "var(--surface-container-highest)" }}
-                />
-              </div>
+              {queryType !== "COUNT" && (
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wider block mb-2" style={{ color: "var(--on-surface-variant)" }}>
+                    Target Column <span style={{ color: "var(--outline)" }}>(Numeric)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. price, quantity..."
+                    value={column}
+                    onChange={(e) => setColumn(e.target.value)}
+                    className="kinetic-input w-full text-sm"
+                    style={{ background: "var(--surface-container-highest)" }}
+                  />
+                </div>
+              )}
+
+              {groupBy && (
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wider block mb-2" style={{ color: "var(--on-surface-variant)" }}>
+                    Group By Column
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. category, region..."
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value)}
+                    className="kinetic-input w-full text-sm"
+                    style={{ background: "var(--surface-container-highest)" }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -162,8 +182,8 @@ export default function QueryWorkbenchView(props: Props) {
                 <div className="pl-4">Cost: 0.00..{(results.approximate.time_ms * 100).toFixed(2)} | Rows: {file?.name || "dataset"}</div>
                 <div className="pl-4" style={{ color: "var(--tertiary-green)" }}>PARALLEL SCAN uploaded_dataset</div>
                 <div className="pl-8">Sample Rate: {(accuracyLevel / 100).toFixed(2)} | Workers: 32</div>
-                <div className="pl-8" style={{ color: "var(--on-surface-variant)" }}>
-                  FILTER ({queryType}({column || "*"}))
+                 <div className="pl-8" style={{ color: "var(--on-surface-variant)" }}>
+                  FILTER ({queryType}({column || "*"}) {groupBy ? `BY ${groupBy}` : ""})
                 </div>
               </div>
             </div>
@@ -189,10 +209,12 @@ export default function QueryWorkbenchView(props: Props) {
               </p>
               {results ? (
                 <div className="space-y-3">
-                  <div>
+                   <div>
                     <p className="text-[10px] mb-1" style={{ color: "var(--on-surface-variant)" }}>Estimated Value</p>
-                    <p className="kpi-value text-4xl" style={{ color: "var(--tertiary-green)" }}>
-                      ~{Number(results.approximate.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    <p className="kpi-value text-3xl" style={{ color: "var(--tertiary-green)" }}>
+                      {typeof results.approximate.value === 'object' && results.approximate.value !== null
+                        ? `${Object.keys(results.approximate.value).length} Groups`
+                        : `~${Number(results.approximate.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                     </p>
                   </div>
                   <div className="flex items-center justify-between p-3" style={{ background: "var(--surface-container-low)" }}>
@@ -215,10 +237,12 @@ export default function QueryWorkbenchView(props: Props) {
               <p className="text-[10px] mb-4" style={{ color: "var(--on-surface-variant)" }}>Scanning 100% of data</p>
               {results ? (
                 <div className="space-y-3">
-                  <div>
+                   <div>
                     <p className="text-[10px] mb-1" style={{ color: "var(--on-surface-variant)" }}>True Value</p>
-                    <p className="kpi-value text-4xl" style={{ color: "var(--error-red)" }}>
-                      {Number(results.exact.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    <p className="kpi-value text-3xl" style={{ color: "var(--error-red)" }}>
+                      {typeof results.exact.value === 'object' && results.exact.value !== null
+                        ? `${Object.keys(results.exact.value).length} Groups`
+                        : Number(results.exact.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </p>
                   </div>
                   <div className="flex items-center justify-between p-3" style={{ background: "var(--surface-container-low)" }}>
@@ -239,9 +263,9 @@ export default function QueryWorkbenchView(props: Props) {
             <h3 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif", color: "var(--on-surface)" }}>
               Performance Comparison
             </h3>
-            <div className="h-56">
+            <div className="h-56" style={{ minWidth: 0, minHeight: 0 }}>
               {results ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid stroke="rgba(64,72,93,0.15)" vertical={false} />
                     <XAxis dataKey="name" tick={{ fill: "#a3aac4", fontSize: 11 }} axisLine={false} tickLine={false} />

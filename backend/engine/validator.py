@@ -1,43 +1,76 @@
-from storage.db import db_manager
+from backend.storage.db import db_manager
+import time
 
 
 class Validator:
 
-    @staticmethod
-    def table_exists(table_name: str):
-        conn = db_manager.get_connection()
-        result = conn.execute(f"""
-            SELECT COUNT(*) 
-            FROM information_schema.tables 
-            WHERE table_name = '{table_name}'
-        """).fetchone()[0]
+    _schema_cache = None
+    _last_refresh = 0
+    _ttl_seconds = 60  # refresh every 60s
 
-        if result == 0:
-            raise ValueError(f"Table '{table_name}' does not exist")
-
+    # -------------------------
+    # LOAD SCHEMA (CACHED)
+    # -------------------------
     @staticmethod
-    def column_exists(table_name: str, column: str):
+    def _load_schema():
         conn = db_manager.get_connection()
 
-        result = conn.execute(f"""
-            SELECT COUNT(*)
+        rows = conn.execute("""
+            SELECT table_name, column_name
             FROM information_schema.columns
-            WHERE table_name = '{table_name}'
-            AND column_name = '{column}'
-        """).fetchone()[0]
+        """).fetchall()
 
-        if result == 0:
-            raise ValueError(f"Column '{column}' does not exist in '{table_name}'")
+        schema = {}
 
+        for table_name, column_name in rows:
+            if table_name not in schema:
+                schema[table_name] = set()
+
+            schema[table_name].add(column_name)
+
+        return schema
+
+    @staticmethod
+    def _get_schema():
+        now = time.time()
+
+        if (
+            Validator._schema_cache is None
+            or now - Validator._last_refresh > Validator._ttl_seconds
+        ):
+            Validator._schema_cache = Validator._load_schema()
+            Validator._last_refresh = now
+
+        return Validator._schema_cache
+
+    # -------------------------
+    # VALIDATION
+    # -------------------------
     @staticmethod
     def validate_query(req):
-        Validator.table_exists(req.table_name)
+        schema = Validator._get_schema()
 
-        if req.query_type in ["SUM", "AVG"]:
-            if not req.column:
-                raise ValueError(f"{req.query_type} requires a column")
+        table = req.table_name
+        column = req.column
+        group_by = req.group_by
+        query_type = req.query_type
 
-            Validator.column_exists(req.table_name, req.column)
+        if table not in schema:
+            raise ValueError(f"Table '{table}' does not exist")
 
-        if req.group_by:
-            Validator.column_exists(req.table_name, req.group_by)
+        if query_type in ["SUM", "AVG", "COUNT_DISTINCT"]:
+            if not column:
+                raise ValueError(f"{query_type} requires a column")
+
+            if column not in schema[table]:
+                raise ValueError(f"Column '{column}' does not exist in '{table}'")
+
+        if group_by:
+            if group_by not in schema[table]:
+                raise ValueError(f"Group by column '{group_by}' does not exist in '{table}'")
+
+        if req.target_error is not None:
+            if req.target_error < 0 or req.target_error >= 1:
+                raise ValueError("target_error must be between 0 (exact) and < 1")
+
+        return True

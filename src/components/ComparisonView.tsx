@@ -66,9 +66,9 @@ export default function ComparisonView(props: Props) {
             Execution Latency
           </h3>
           <p className="text-[10px] mb-4" style={{ color: "var(--on-surface-variant)" }}>Time-to-first-row (TTFR) comparison in milliseconds</p>
-          <div className="h-48">
+          <div className="h-48" style={{ minWidth: 0, minHeight: 0 }}>
             {latestResult ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={comparisonData} layout="vertical" margin={{ left: 20 }}>
                   <CartesianGrid stroke="rgba(64,72,93,0.15)" horizontal={false} />
                   <XAxis type="number" tick={{ fill: "#a3aac4", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}ms`} />

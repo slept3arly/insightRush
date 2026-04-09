@@ -19,8 +19,65 @@ def ingest_csv(file_bytes, filename):
     conn = db_manager.get_connection()
 
     conn.execute(f"""
-        CREATE TABLE {table_name} AS
-        SELECT * FROM read_csv_auto('{path}')
-    """)
+    CREATE TABLE {table_name} AS
+    SELECT *
+    FROM read_csv_auto('{path}')
+""")
+
+# 🔥 TEMP: simulate large dataset (FOR TESTING ONLY)
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
+
+    conn.execute(f"""
+    INSERT INTO {table_name}
+    SELECT * FROM {table_name}
+""")
 
     return table_name

@@ -1,7 +1,18 @@
 import duckdb
+import os
+
 
 class DuckDBManager:
-    def __init__(self, db_path="insightrush.db"):
+    def __init__(self):
+        # -------------------------
+        # ABSOLUTE PATH (FIXED)
+        # -------------------------
+        DB_DIR = r"C:\Development\Projects\insightRushDB\db_data"
+
+        os.makedirs(DB_DIR, exist_ok=True)
+
+        db_path = os.path.join(DB_DIR, "insightRush.db")
+
         self.conn = duckdb.connect(db_path)
         self._configure()
 

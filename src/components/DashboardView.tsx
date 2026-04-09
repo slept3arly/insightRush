@@ -2,28 +2,36 @@
 import { QueryResult, BenchmarkResponse } from "@/types";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, AreaChart, Area
+  ResponsiveContainer, AreaChart, Area, LineChart, Line
 } from "recharts";
+import { SystemStats } from "@/types";
 
 interface Props {
   results: QueryResult | null;
   benchmarkResults: BenchmarkResponse | null;
   queryHistory: Array<{ type: string; column: string; accuracy: number; result: QueryResult; timestamp: Date }>;
+  systemStats: SystemStats | null;
 }
 
-const mockPerformanceData = [
-  { time: "00:00", latency: 12, throughput: 84 },
-  { time: "00:05", latency: 15, throughput: 78 },
-  { time: "00:10", latency: 9, throughput: 92 },
-  { time: "00:15", latency: 11, throughput: 88 },
-  { time: "00:20", latency: 8, throughput: 95 },
-  { time: "00:25", latency: 13, throughput: 82 },
-  { time: "00:30", latency: 7, throughput: 97 },
-];
+// Derive performance data from actual query history
+const getLivePerformanceData = (history: any[]) => {
+  if (history.length === 0) {
+    return [
+      { time: "00:00", latency: 0, throughput: 0 },
+      { time: "00:01", latency: 0, throughput: 0 },
+    ];
+  }
+  return history.slice(-7).map((q, i) => ({
+    time: q.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    latency: q.result.approximate.time_ms,
+    throughput: q.result.metrics.speedup * 10, // Normalized for viz
+  }));
+};
 
 export default function DashboardView(props: Props) {
-  const { results, queryHistory } = props;
+  const { results, queryHistory, systemStats } = props;
   const latestResult = results || (queryHistory.length > 0 ? queryHistory[queryHistory.length - 1].result : null);
+  const performanceData = getLivePerformanceData(queryHistory);
 
   return (
     <div className="p-6 space-y-6">
@@ -54,10 +62,10 @@ export default function DashboardView(props: Props) {
       {/* KPI Row */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Active Nodes", value: "124", sub: "32 Workers", color: "var(--primary-cyan)" },
-          { label: "Memory Allocation", value: "67%", sub: "12.4 GB / 18 GB", color: "var(--primary-cyan)" },
-          { label: "Ingestion Rate", value: "2.4M", sub: "rows/sec", color: "var(--tertiary-green)" },
-          { label: "Avg Latency", value: latestResult ? `${latestResult.approximate.time_ms.toFixed(1)}ms` : "4.2ms", sub: "p99: 12ms", color: "var(--primary-cyan)" },
+          { label: "Active Tables", value: systemStats?.active_tables || "0", sub: "Cached Engines", color: "var(--primary-cyan)" },
+          { label: "Memory Usage", value: systemStats ? `${systemStats.memory_usage_mb}MB` : "0MB", sub: "RSS Footprint", color: "var(--primary-cyan)" },
+          { label: "Indexed Rows", value: systemStats?.total_cached_rows ? `${(systemStats.total_cached_rows / 1000).toFixed(1)}K` : "0", sub: "In-memory", color: "var(--tertiary-green)" },
+          { label: "Avg Latency", value: latestResult ? `${latestResult.approximate.time_ms.toFixed(1)}ms` : "0ms", sub: "Real-time", color: "var(--primary-cyan)" },
         ].map((kpi, i) => (
           <div key={i} className="p-5 status-ribbon status-ribbon-active" style={{ background: "var(--surface-container)" }}>
             <p className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: "var(--on-surface-variant)" }}>
@@ -76,9 +84,9 @@ export default function DashboardView(props: Props) {
           <h3 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif", color: "var(--on-surface)" }}>
             Performance Analytics
           </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockPerformanceData}>
+          <div className="h-64" style={{ minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <AreaChart data={performanceData}>
                 <defs>
                   <linearGradient id="latencyGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#81ecff" stopOpacity={0.3} />
@@ -108,9 +116,9 @@ export default function DashboardView(props: Props) {
             Live Data Streams
           </h3>
           {[
-            { label: "Storage Engine", val: "92%", status: "green" },
-            { label: "Query Cache", val: "78%", status: "cyan" },
-            { label: "Index Buffer", val: "45%", status: "cyan" },
+            { label: "Memory Pressure", val: systemStats ? `${Math.min(100, (systemStats.memory_usage_mb / 512) * 100).toFixed(0)}%` : "0%", status: "cyan" },
+            { label: "Table Cache", val: systemStats ? `${Math.min(100, (systemStats.active_tables / 10) * 100).toFixed(0)}%` : "0%", status: "cyan" },
+            { label: "Engine Health", val: systemStats?.engine_status === "OPTIMAL" ? "100%" : "0%", status: "green" },
           ].map((s, i) => (
             <div key={i} className="p-3" style={{ background: "var(--surface-container-low)" }}>
               <div className="flex justify-between items-center mb-2">
@@ -134,8 +142,8 @@ export default function DashboardView(props: Props) {
               <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--on-surface-variant)" }}>Engine Load</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold mono-data" style={{ color: "var(--tertiary-green)" }}>OPTIMAL</span>
-              <span className="text-xs mono-data" style={{ color: "var(--on-surface-variant)" }}>(12.4%)</span>
+              <span className="text-lg font-bold mono-data" style={{ color: "var(--tertiary-green)" }}>{systemStats?.engine_status || "INITIALIZING"}</span>
+              <span className="text-xs mono-data" style={{ color: "var(--on-surface-variant)" }}>(0.1s check)</span>
             </div>
           </div>
         </div>
