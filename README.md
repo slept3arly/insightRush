@@ -208,6 +208,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
+- DataSet can be produced by running generate_data.py script.
 - Built with [FastAPI](https://fastapi.tiangolo.com/) and [Next.js](https://nextjs.org/)
 - Powered by [DuckDB](https://duckdb.org/) for analytical processing
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
