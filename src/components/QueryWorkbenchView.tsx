@@ -35,6 +35,12 @@ export default function QueryWorkbenchView(props: Props) {
     Exact: Number(results.exact.time_ms.toFixed(2)),
     Approximate: Number(results.approximate.time_ms.toFixed(2)),
   }] : [];
+  const approxIsFallback = results?.approximate.mode === "exact";
+  const sampledDataLabel = results
+    ? approxIsFallback
+      ? "Planner chose exact execution"
+      : `Using ${(results.metrics.fraction_used * 100).toFixed(0)}% sampled data`
+    : `Requested accuracy target ${accuracyLevel}%`;
 
   return (
     <div className="p-6 space-y-6">
@@ -116,21 +122,19 @@ export default function QueryWorkbenchView(props: Props) {
                 </div>
               )}
 
-              {groupBy && (
-                <div>
-                  <label className="text-[11px] font-medium uppercase tracking-wider block mb-2" style={{ color: "var(--on-surface-variant)" }}>
-                    Group By Column
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. category, region..."
-                    value={groupBy}
-                    onChange={(e) => setGroupBy(e.target.value)}
-                    className="kinetic-input w-full text-sm"
-                    style={{ background: "var(--surface-container-highest)" }}
-                  />
-                </div>
-              )}
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wider block mb-2" style={{ color: "var(--on-surface-variant)" }}>
+                  Group By Column <span style={{ color: "var(--outline)" }}>(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. category, region..."
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value)}
+                  className="kinetic-input w-full text-sm"
+                  style={{ background: "var(--surface-container-highest)" }}
+                />
+              </div>
             </div>
           </div>
 
@@ -142,7 +146,7 @@ export default function QueryWorkbenchView(props: Props) {
             </h3>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--on-surface-variant)" }}>Sample Size</span>
+                <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--on-surface-variant)" }}>Accuracy Target</span>
                 <span className="mono-data text-sm font-bold" style={{ color: "var(--primary-cyan)" }}>{accuracyLevel}%</span>
               </div>
               <input
@@ -178,13 +182,20 @@ export default function QueryWorkbenchView(props: Props) {
                 Execution Plan
               </h3>
               <div className="p-3 mono-data text-xs space-y-1" style={{ background: "var(--surface-container-lowest)", color: "var(--on-surface-variant)" }}>
-                <div style={{ color: "var(--primary-cyan)" }}>AGGREGATE (Approximate)</div>
+                <div style={{ color: "var(--primary-cyan)" }}>
+                  AGGREGATE ({approxIsFallback ? "Exact Fallback" : "Approximate"})
+                </div>
                 <div className="pl-4">Cost: 0.00..{(results.approximate.time_ms * 100).toFixed(2)} | Rows: {file?.name || "dataset"}</div>
                 <div className="pl-4" style={{ color: "var(--tertiary-green)" }}>PARALLEL SCAN uploaded_dataset</div>
-                <div className="pl-8">Sample Rate: {(accuracyLevel / 100).toFixed(2)} | Workers: 32</div>
+                <div className="pl-8">Sample Rate: {results.metrics.fraction_used.toFixed(2)} | Workers: 32</div>
                  <div className="pl-8" style={{ color: "var(--on-surface-variant)" }}>
                   FILTER ({queryType}({column || "*"}) {groupBy ? `BY ${groupBy}` : ""})
                 </div>
+                {results.query?.approximation_note && (
+                  <div className="pl-4" style={{ color: approxIsFallback ? "var(--error-red)" : "var(--primary-cyan)" }}>
+                    {results.query.approximation_note}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -202,10 +213,10 @@ export default function QueryWorkbenchView(props: Props) {
                 </div>
               )}
               <h4 className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--tertiary-green)" }}>
-                Approximate Engine
+                {approxIsFallback ? "Exact Fallback" : "Approximate Engine"}
               </h4>
               <p className="text-[10px] mb-4" style={{ color: "var(--on-surface-variant)" }}>
-                Using {accuracyLevel}% sampled data
+                {sampledDataLabel}
               </p>
               {results ? (
                 <div className="space-y-3">

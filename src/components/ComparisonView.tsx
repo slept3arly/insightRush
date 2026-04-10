@@ -1,11 +1,20 @@
 "use client";
-import { QueryResult, BenchmarkResponse, BenchmarkRow } from "@/types";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+import { BenchmarkResponse, BenchmarkRow, QueryResult } from "@/types";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Props {
   results: QueryResult | null;
   benchmarkResults: BenchmarkResponse | null;
   queryHistory: Array<{ type: string; column: string; accuracy: number; result: QueryResult; timestamp: Date }>;
+}
+
+function formatResultValue(value: number | Record<string, number>) {
+  if (typeof value === "object" && value !== null) {
+    return `${Object.keys(value).length} Groups`;
+  }
+
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 export default function ComparisonView(props: Props) {
@@ -18,7 +27,13 @@ export default function ComparisonView(props: Props) {
   ] : [];
 
   const errorPct = latestResult && typeof latestResult.metrics.error_percent === "number"
-    ? latestResult.metrics.error_percent : null;
+    ? latestResult.metrics.error_percent
+    : null;
+  const approxIsFallback = latestResult?.approximate.mode === "exact";
+  const confidencePct = latestResult?.metrics.confidence_level !== null && latestResult?.metrics.confidence_level !== undefined
+    ? `${(latestResult.metrics.confidence_level * 100).toFixed(0)}%`
+    : "-";
+  const isWithinTolerance = errorPct !== null && errorPct < 5;
 
   return (
     <div className="p-6 space-y-6">
@@ -37,23 +52,23 @@ export default function ComparisonView(props: Props) {
         <div className="p-6 text-center" style={{ background: "var(--surface-container)" }}>
           <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--on-surface-variant)" }}>Performance Lift</p>
           <p className="kpi-value text-5xl" style={{ color: "var(--primary-cyan)" }}>
-            {latestResult ? `${latestResult.metrics.speedup.toFixed(1)}x` : "—"}
+            {latestResult ? approxIsFallback ? "N/A" : `${latestResult.metrics.speedup.toFixed(1)}x` : "-"}
           </p>
           <p className="text-[11px] mt-2 uppercase tracking-wider" style={{ color: "var(--tertiary-green)" }}>Faster</p>
         </div>
         <div className="p-6 text-center" style={{ background: "var(--surface-container)" }}>
           <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--on-surface-variant)" }}>Error Margin</p>
-          <p className="kpi-value text-5xl" style={{ color: errorPct !== null && errorPct < 1 ? "var(--tertiary-green)" : "var(--error-red)" }}>
-            {errorPct !== null ? `${errorPct.toFixed(2)}%` : "—"}
+          <p className="kpi-value text-5xl" style={{ color: errorPct !== null && errorPct < 5 ? "var(--tertiary-green)" : "var(--error-red)" }}>
+            {errorPct !== null ? `${errorPct.toFixed(2)}%` : "-"}
           </p>
-          <p className="text-[11px] mt-2 uppercase tracking-wider" style={{ color: "var(--tertiary-green)" }}>
-            {errorPct !== null && errorPct < 1 ? "Verified Accurate" : "Awaiting Data"}
+          <p className="text-[11px] mt-2 uppercase tracking-wider" style={{ color: isWithinTolerance ? "var(--tertiary-green)" : "var(--on-surface-variant)" }}>
+            {isWithinTolerance ? "Verified Accurate" : latestResult ? "Needs Review" : "Awaiting Data"}
           </p>
         </div>
         <div className="p-6 text-center" style={{ background: "var(--surface-container)" }}>
           <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--on-surface-variant)" }}>Confidence Interval</p>
           <p className="kpi-value text-5xl" style={{ color: "var(--primary-cyan)" }}>
-            {latestResult ? "99.9%" : "—"}
+            {confidencePct}
           </p>
           <p className="text-[11px] mt-2 uppercase tracking-wider" style={{ color: "var(--on-surface-variant)" }}>CI Level</p>
         </div>
@@ -75,8 +90,8 @@ export default function ComparisonView(props: Props) {
                   <YAxis type="category" dataKey="name" tick={{ fill: "#a3aac4", fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
                   <Tooltip contentStyle={{ background: "#141f38", border: "none", borderRadius: 0, color: "#dee5ff", fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }} />
                   <Bar dataKey="value" maxBarSize={30}>
-                    {comparisonData.map((entry, i) => (
-                      <rect key={i} fill={entry.fill} />
+                    {comparisonData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.fill} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -96,10 +111,10 @@ export default function ComparisonView(props: Props) {
           </h3>
           <div className="space-y-3">
             {[
-              { label: "Accuracy", value: errorPct !== null ? `${(100 - errorPct).toFixed(2)}%` : "—", good: true },
-              { label: "Error Margin", value: errorPct !== null ? `${errorPct.toFixed(4)}%` : "—", good: errorPct !== null && errorPct < 1 },
-              { label: "Speedup Factor", value: latestResult ? `${latestResult.metrics.speedup.toFixed(2)}x` : "—", good: true },
-              { label: "Sample Fraction", value: latestResult ? `${(latestResult.metrics.fraction_used * 100).toFixed(0)}%` : "—", good: true },
+              { label: "Accuracy", value: errorPct !== null ? `${Math.max(0, 100 - errorPct).toFixed(2)}%` : "-", good: true },
+              { label: "Error Margin", value: errorPct !== null ? `${errorPct.toFixed(4)}%` : "-", good: isWithinTolerance },
+              { label: "Speedup Factor", value: latestResult ? `${latestResult.metrics.speedup.toFixed(2)}x` : "-", good: true },
+              { label: "Sample Fraction", value: latestResult ? `${(latestResult.metrics.fraction_used * 100).toFixed(0)}%` : "-", good: true },
             ].map((item, i) => (
               <div key={i} className="flex items-center justify-between p-3" style={{ background: "var(--surface-container-low)" }}>
                 <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--on-surface-variant)" }}>{item.label}</span>
@@ -109,10 +124,12 @@ export default function ComparisonView(props: Props) {
               </div>
             ))}
             {latestResult && (
-              <div className="p-3 flex items-center gap-2" style={{ background: "rgba(155,255,206,0.08)" }}>
-                <span className="material-symbols-outlined text-[16px]" style={{ color: "var(--tertiary-green)" }}>verified</span>
-                <span className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "var(--tertiary-green)" }}>
-                  Verified Accurate
+              <div className="p-3 flex items-center gap-2" style={{ background: isWithinTolerance ? "rgba(155,255,206,0.08)" : "rgba(255,113,108,0.08)" }}>
+                <span className="material-symbols-outlined text-[16px]" style={{ color: isWithinTolerance ? "var(--tertiary-green)" : "var(--error-red)" }}>
+                  {isWithinTolerance ? "verified" : "warning"}
+                </span>
+                <span className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: isWithinTolerance ? "var(--tertiary-green)" : "var(--error-red)" }}>
+                  {isWithinTolerance ? "Verified Accurate" : "Review Approximation"}
                 </span>
               </div>
             )}
@@ -125,6 +142,11 @@ export default function ComparisonView(props: Props) {
         <h3 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif", color: "var(--on-surface)" }}>
           Result Set Validation
         </h3>
+        {approxIsFallback && latestResult?.query?.approximation_note && (
+          <div className="p-3 mb-4 text-xs" style={{ background: "rgba(255,113,108,0.08)", color: "var(--error-red)" }}>
+            {latestResult.query.approximation_note}
+          </div>
+        )}
         <div className="p-3 mb-4 mono-data text-xs" style={{ background: "var(--surface-container-lowest)", color: "var(--primary-cyan)" }}>
           SELECT approx_count_distinct(user_id, 0.01) FROM telemetry_stream WHERE region = &apos;us-east-1&apos;
         </div>
@@ -143,16 +165,16 @@ export default function ComparisonView(props: Props) {
               <tr>
                 <td>{queryHistory.length > 0 ? queryHistory[queryHistory.length - 1].type : "VALUE"}</td>
                 <td style={{ color: "var(--tertiary-green)" }}>
-                  {Number(latestResult.approximate.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {formatResultValue(latestResult.approximate.value)}
                 </td>
-                <td>{Number(latestResult.exact.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                <td>{formatResultValue(latestResult.exact.value)}</td>
                 <td>{errorPct !== null ? `${errorPct.toFixed(4)}%` : "N/A"}</td>
                 <td>
                   <span className="px-2 py-0.5 text-[10px] font-semibold uppercase" style={{
-                    background: errorPct !== null && errorPct < 5 ? "rgba(155,255,206,0.15)" : "rgba(255,113,108,0.15)",
-                    color: errorPct !== null && errorPct < 5 ? "var(--tertiary-green)" : "var(--error-red)"
+                    background: isWithinTolerance ? "rgba(155,255,206,0.15)" : "rgba(255,113,108,0.15)",
+                    color: isWithinTolerance ? "var(--tertiary-green)" : "var(--error-red)",
                   }}>
-                    {errorPct !== null && errorPct < 5 ? "PASS" : "REVIEW"}
+                    {isWithinTolerance ? "PASS" : "REVIEW"}
                   </span>
                 </td>
               </tr>
@@ -185,7 +207,7 @@ export default function ComparisonView(props: Props) {
                   <td>
                     <span className="px-2 py-0.5 text-[10px] font-semibold uppercase" style={{
                       background: typeof row.error_percent === "number" && row.error_percent < 5 ? "rgba(155,255,206,0.15)" : "rgba(255,113,108,0.15)",
-                      color: typeof row.error_percent === "number" && row.error_percent < 5 ? "var(--tertiary-green)" : "var(--error-red)"
+                      color: typeof row.error_percent === "number" && row.error_percent < 5 ? "var(--tertiary-green)" : "var(--error-red)",
                     }}>
                       {typeof row.error_percent === "number" && row.error_percent < 5 ? "PASS" : "REVIEW"}
                     </span>

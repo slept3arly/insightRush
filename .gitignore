@@ -25,7 +25,12 @@
 *.pem
 
 # data files
-data/*.csv
+data/
+**/*.csv
+*.db
+*.duckdb
+*.db-journal
+*.db-wal
 tmp/
 tmp_uploads/
 

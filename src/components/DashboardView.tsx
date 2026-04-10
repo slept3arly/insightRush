@@ -1,8 +1,8 @@
 "use client";
 import { QueryResult, BenchmarkResponse } from "@/types";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, AreaChart, Area, LineChart, Line
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import { SystemStats } from "@/types";
 
@@ -14,14 +14,14 @@ interface Props {
 }
 
 // Derive performance data from actual query history
-const getLivePerformanceData = (history: any[]) => {
+const getLivePerformanceData = (history: Props["queryHistory"]) => {
   if (history.length === 0) {
     return [
       { time: "00:00", latency: 0, throughput: 0 },
       { time: "00:01", latency: 0, throughput: 0 },
     ];
   }
-  return history.slice(-7).map((q, i) => ({
+  return history.slice(-7).map((q) => ({
     time: q.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     latency: q.result.approximate.time_ms,
     throughput: q.result.metrics.speedup * 10, // Normalized for viz
@@ -118,7 +118,7 @@ export default function DashboardView(props: Props) {
           {[
             { label: "Memory Pressure", val: systemStats ? `${Math.min(100, (systemStats.memory_usage_mb / 512) * 100).toFixed(0)}%` : "0%", status: "cyan" },
             { label: "Table Cache", val: systemStats ? `${Math.min(100, (systemStats.active_tables / 10) * 100).toFixed(0)}%` : "0%", status: "cyan" },
-            { label: "Engine Health", val: systemStats?.engine_status === "OPTIMAL" ? "100%" : "0%", status: "green" },
+            { label: "Engine Health", val: systemStats && systemStats.engine_status !== "OFFLINE" ? "100%" : "0%", status: "green" },
           ].map((s, i) => (
             <div key={i} className="p-3" style={{ background: "var(--surface-container-low)" }}>
               <div className="flex justify-between items-center mb-2">

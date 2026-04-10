@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Sidebar from "@/components/Sidebar";
@@ -8,7 +8,81 @@ import DashboardView from "@/components/DashboardView";
 import QueryWorkbenchView from "@/components/QueryWorkbenchView";
 import ComparisonView from "@/components/ComparisonView";
 import ConfigurationView from "@/components/ConfigurationView";
-import { QueryResult, BenchmarkResponse, ViewType, SystemStats } from "@/types";
+import { BenchmarkResponse, QueryResult, SystemStats, ViewType } from "@/types";
+
+function extractResultValue(result: unknown): number | Record<string, number> {
+  if (typeof result === "object" && result !== null) {
+    if ("estimate" in result && typeof result.estimate === "number") {
+      return result.estimate;
+    }
+
+    return result as Record<string, number>;
+  }
+
+  return typeof result === "number" ? result : 0;
+}
+
+function extractErrorMargin(result: unknown, topLevelErrorMargin: number | null | undefined) {
+  if (typeof topLevelErrorMargin === "number") {
+    return topLevelErrorMargin;
+  }
+
+  if (typeof result === "object" && result !== null && "error_margin" in result) {
+    return typeof result.error_margin === "number" ? result.error_margin : null;
+  }
+
+  return null;
+}
+
+function calculateErrorPercent(params: {
+  approximate: number | Record<string, number>;
+  exact?: number | Record<string, number>;
+  errorMargin?: number | null;
+}) {
+  const { approximate, exact, errorMargin } = params;
+
+  if (typeof approximate === "number" && typeof exact === "number") {
+    if (exact === 0) {
+      return approximate === 0 ? 0 : null;
+    }
+
+    return (Math.abs(approximate - exact) / Math.abs(exact)) * 100;
+  }
+
+  if (typeof approximate === "number" && typeof errorMargin === "number" && approximate !== 0) {
+    return (Math.abs(errorMargin) / Math.abs(approximate)) * 100;
+  }
+
+  return null;
+}
+
+function calculateSpeedup(exactTimeMs: number, approxTimeMs: number) {
+  if (approxTimeMs <= 0) {
+    return 0;
+  }
+
+  return exactTimeMs / approxTimeMs;
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.detail || fallback;
+  }
+
+  return fallback;
+}
+
+function buildApproximationNote(mode: "exact" | "approx", sampleFraction: number, queryType: string) {
+  if (mode === "exact") {
+    if (queryType === "COUNT") {
+      return "Planner kept COUNT on the exact path because DuckDB already executes it faster than sampled AQP.";
+    }
+
+    return `Planner selected exact fallback for this ${queryType} query and dataset size.`;
+  }
+
+  return `Approximation is using a cached ${(sampleFraction * 100).toFixed(0)}% sample.`;
+}
 
 export default function Home() {
   const [activeView, setActiveView] = useState<ViewType>("dashboard");
@@ -34,12 +108,12 @@ export default function Home() {
       try {
         const res = await axios.get(`${API_BASE}/stats`);
         setSystemStats(res.data);
-      } catch (e) {
+      } catch {
         setSystemStats({
           active_tables: 0,
           memory_usage_mb: 0,
           engine_status: "OFFLINE",
-          total_cached_rows: 0
+          total_cached_rows: 0,
         });
       }
     };
@@ -52,6 +126,7 @@ export default function Home() {
   useEffect(() => {
     setResults(null);
     setBenchmarkResults(null);
+    setActiveTable(null);
   }, [file]);
 
   const runBenchmark = async () => {
@@ -69,8 +144,23 @@ export default function Home() {
         setActiveTable(currentTable);
       }
 
+      const exactPayload = {
+        table_name: currentTable,
+        query_type: queryType,
+        column: column || null,
+        group_by: groupBy || null,
+        target_error: 0,
+      };
+
+      await axios.post(`${API_BASE}/query`, exactPayload);
+      const exactStart = performance.now();
+      const exactRes = await axios.post(`${API_BASE}/query`, exactPayload);
+      const exactEnd = performance.now();
+      const exactValue = extractResultValue(exactRes.data.result);
+      const exactTimeMs = exactEnd - exactStart;
+
       const targetErrors = [0.05, 0.1, 0.25];
-      const benchmarkResults: any[] = [];
+      const nextBenchmarkResults = [];
 
       for (const targetError of targetErrors) {
         const payload = {
@@ -78,35 +168,39 @@ export default function Home() {
           query_type: queryType,
           column: column || null,
           group_by: groupBy || null,
-          target_error: targetError
+          target_error: targetError,
         };
 
+        await axios.post(`${API_BASE}/query`, payload);
         const tsStart = performance.now();
         const res = await axios.post(`${API_BASE}/query`, payload);
         const tsEnd = performance.now();
 
-        const estimateValue =
-          typeof res.data.result === "object"
-            ? res.data.result?.estimate ?? 0
-            : res.data.result ?? 0;
+        const estimateValue = extractResultValue(res.data.result);
+        const errorMargin = extractErrorMargin(res.data.result, res.data.error_margin);
+        const errorPercent = calculateErrorPercent({
+          approximate: estimateValue,
+          exact: exactValue,
+          errorMargin,
+        });
+        const sampleFraction =
+          typeof res.data.meta?.sample_fraction === "number"
+            ? res.data.meta.sample_fraction
+            : 1;
 
-        const errorMargin =
-          res.data.error_margin ?? res.data.result?.error_margin ?? targetError;
-
-        benchmarkResults.push({
-          fraction: 1 - targetError,
-          approx: estimateValue,
-          error_percent: errorMargin * 100,
+        nextBenchmarkResults.push({
+          fraction: sampleFraction,
+          approx: typeof estimateValue === "number" ? estimateValue : undefined,
+          error_percent: errorPercent,
           time_ms: Math.round(tsEnd - tsStart),
-          speedup: 5.0
+          speedup: calculateSpeedup(exactTimeMs, tsEnd - tsStart),
         });
       }
 
-      setBenchmarkResults({ benchmark: benchmarkResults } as any);
+      setBenchmarkResults({ benchmark: nextBenchmarkResults });
       setResults(null);
-
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Benchmark failed.");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Benchmark failed."));
     } finally {
       setLoading(false);
     }
@@ -133,71 +227,78 @@ export default function Home() {
         query_type: queryType,
         column: column || null,
         group_by: groupBy || null,
-        target_error: targetError
+        target_error: targetError,
       };
-
-      // 🔵 APPROX QUERY
-      const approxStart = performance.now();
-      const res = await axios.post(`${API_BASE}/query`, payload);
-      const approxEnd = performance.now();
-
-      // 🔵 EXACT QUERY
-      const exactStart = performance.now();
 
       const exactPayload = {
         table_name: currentTable,
         query_type: queryType,
         column: column || null,
         group_by: groupBy || null,
-        target_error: 0
+        target_error: 0,
       };
 
+      await axios.post(`${API_BASE}/query`, payload);
+      await axios.post(`${API_BASE}/query`, exactPayload);
+
+      const approxStart = performance.now();
+      const res = await axios.post(`${API_BASE}/query`, payload);
+      const approxEnd = performance.now();
+
+      const exactStart = performance.now();
       const exactRes = await axios.post(`${API_BASE}/query`, exactPayload);
       const exactEnd = performance.now();
 
-      // 🔵 Parse approximate
-      const estimateValue =
-        typeof res.data.result === "object"
-          ? res.data.result?.estimate ?? 0
-          : res.data.result ?? 0;
-
-      const errorMargin =
-        res.data.error_margin ?? res.data.result?.error_margin ?? null;
-
-      // 🔵 Parse exact
-      const exactValue =
-        typeof exactRes.data.result === "object"
-          ? exactRes.data.result?.estimate ?? 0
-          : exactRes.data.result ?? 0;
+      const estimateValue = extractResultValue(res.data.result);
+      const exactValue = extractResultValue(exactRes.data.result);
+      const errorMargin = extractErrorMargin(res.data.result, res.data.error_margin);
+      const confidenceLevel =
+        typeof res.data.confidence === "number"
+          ? res.data.confidence
+          : typeof res.data.result?.confidence === "number"
+            ? res.data.result.confidence
+            : null;
+      const sampleFraction =
+        typeof res.data.meta?.sample_fraction === "number"
+          ? res.data.meta.sample_fraction
+          : 1;
+      const approximationNote = buildApproximationNote(res.data.mode, sampleFraction, queryType);
+      const errorPercent = calculateErrorPercent({
+        approximate: estimateValue,
+        exact: exactValue,
+        errorMargin,
+      });
 
       const mappedResult: QueryResult = {
         query: {
           type: res.data.meta?.query_type || queryType,
-          column: column,
+          column,
           group_by: res.data.meta?.group_by || "",
-          accuracy_target: accuracyLevel
+          accuracy_target: accuracyLevel,
+          approximation_note: approximationNote,
         },
         approximate: {
           value: estimateValue,
-          time_ms: Math.round(approxEnd - approxStart)
+          time_ms: Math.round(approxEnd - approxStart),
+          mode: res.data.mode,
         },
         exact: {
           value: exactValue,
-          time_ms: Math.round(exactEnd - exactStart)
+          time_ms: Math.round(exactEnd - exactStart),
+          mode: exactRes.data.mode,
         },
         metrics: {
-          error_percent: errorMargin
-            ? errorMargin * 100
-            : targetError * 100,
-          speedup: (exactEnd - exactStart) / (approxEnd - approxStart),
-          fraction_used: 1 - targetError
-        }
+          error_percent: errorPercent,
+          speedup: calculateSpeedup(exactEnd - exactStart, approxEnd - approxStart),
+          fraction_used: sampleFraction,
+          confidence_level: confidenceLevel,
+        },
       };
 
       setResults(mappedResult);
       setBenchmarkResults(null);
 
-      setQueryHistory(prev => [
+      setQueryHistory((prev) => [
         ...prev,
         {
           type: queryType,
@@ -205,12 +306,11 @@ export default function Home() {
           group_by: groupBy,
           accuracy: accuracyLevel,
           result: mappedResult,
-          timestamp: new Date()
-        }
+          timestamp: new Date(),
+        },
       ]);
-
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Make sure the backend API is running.");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Make sure the backend API is running."));
     } finally {
       setLoading(false);
     }
@@ -220,18 +320,17 @@ export default function Home() {
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--surface)" }}>
       <Sidebar activeView={activeView} setActiveView={setActiveView} />
       <main className="flex-1 overflow-y-auto" style={{ background: "var(--surface)" }}>
-
         {activeView === "dashboard" && (
-          <DashboardView 
-            results={results} 
-            benchmarkResults={benchmarkResults} 
-            queryHistory={queryHistory} 
+          <DashboardView
+            results={results}
+            benchmarkResults={benchmarkResults}
+            queryHistory={queryHistory}
             systemStats={systemStats}
           />
         )}
 
         {activeView === "workbench" && (
-          <QueryWorkbenchView 
+          <QueryWorkbenchView
             file={file}
             setFile={setFile}
             queryType={queryType}
@@ -251,15 +350,14 @@ export default function Home() {
         )}
 
         {activeView === "comparison" && (
-          <ComparisonView 
-            results={results} 
-            benchmarkResults={benchmarkResults} 
+          <ComparisonView
+            results={results}
+            benchmarkResults={benchmarkResults}
             queryHistory={queryHistory}
           />
         )}
 
         {activeView === "configuration" && <ConfigurationView />}
-
       </main>
     </div>
   );
