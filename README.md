@@ -1,4 +1,3 @@
-````markdown
 # InsightRush | Approximate Query Processing Engine
 
 High-performance approximate query processing (AQP) platform for interactive analytics on large datasets with configurable accuracy.
@@ -87,7 +86,7 @@ insightRush/
 ├── data/              # Sample datasets
 ├── tmp_uploads/       # Uploaded CSVs
 └── generate_data.py   # Synthetic dataset generator
-````
+```
 
 ---
 
@@ -111,30 +110,29 @@ npm run dev
 
 App runs on:
 
-* Frontend: http://localhost:3000
-* Backend: http://localhost:8000
+- Frontend: http://localhost:3000  
+- Backend: http://localhost:8000
 
 ---
 
 ## Usage
 
-1. Upload a CSV dataset
-2. Select aggregation type (`SUM / AVG / COUNT`)
-3. Configure accuracy target
-4. Execute query
+1. Upload a CSV dataset  
+2. Select aggregation type (`SUM / AVG / COUNT`)  
+3. Configure accuracy target  
+4. Execute query  
 5. Compare approximate vs exact results
 
 ---
 
 ## Benchmarking & Scale
 
-* Designed for **local experimentation with large datasets**
-* Supports testing with **synthetic data via `generate_data.py`**
-* Performance depends on:
-
-  * dataset size
-  * sampling rate
-  * system memory and CPU
+- Designed for **local experimentation with large datasets**
+- Supports testing with **synthetic data via `generate_data.py`**
+- Performance depends on:
+  - dataset size
+  - sampling rate
+  - system memory and CPU
 
 This project focuses on **query performance tradeoffs**, not production-scale distributed systems.
 
@@ -142,37 +140,33 @@ This project focuses on **query performance tradeoffs**, not production-scale di
 
 ## Security Notes
 
-* Input validation is implemented for schema and query parameters
-* Not production-hardened:
-
-  * No authentication
-  * No rate limiting
-  * Open local usage model
+- Input validation is implemented for schema and query parameters
+- Not production-hardened:
+  - No authentication
+  - No rate limiting
+  - Open local usage model
 
 ---
 
 ## Limitations
 
-* Local deployment only (not hosted)
-* Single-node execution (DuckDB)
-* No persistent multi-user data isolation
-* Limited query types (aggregations only)
+- Local deployment only (not hosted)
+- Single-node execution (DuckDB)
+- No persistent multi-user data isolation
+- Limited query types (aggregations only)
 
 ---
 
 ## Future Improvements
 
-* Add authentication and dataset isolation
-* Introduce query caching
-* Add benchmarking scripts with reproducible results
-* Improve validation and query safety controls
-* Extend to additional query types and joins
+- Add authentication and dataset isolation
+- Introduce query caching
+- Add benchmarking scripts with reproducible results
+- Improve validation and query safety controls
+- Extend to additional query types and joins
 
 ---
 
 ## License
 
 MIT License
-
-```
-```
