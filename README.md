@@ -1,214 +1,178 @@
-# InsightRush | AQP Engine
+````markdown
+# InsightRush | Approximate Query Processing Engine
 
-**High-Performance Approximate Query Processing Engine** — Real-time analytical throughput with configurable accuracy.
-
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![DuckDB](https://img.shields.io/badge/DuckDB-FFF000?logo=duckdb&logoColor=black)](https://duckdb.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+High-performance approximate query processing (AQP) platform for interactive analytics on large datasets with configurable accuracy.
 
 ---
 
 ## Overview
 
-InsightRush is a modern approximate query processing (AQP) platform that enables fast analytical queries on large datasets with configurable accuracy trade-offs. Built with **FastAPI** and **DuckDB** on the backend and **Next.js 16** with **React 19** on the frontend, it delivers real-time insights with statistical guarantees.
+InsightRush is a local-first analytics system that enables fast query execution on large CSV datasets using statistical sampling techniques. It supports both exact and approximate execution paths, allowing users to trade accuracy for performance with measurable confidence.
 
-### Key Features
+The system is designed for experimentation, benchmarking, and understanding query-performance tradeoffs rather than production deployment.
 
-- **Approximate Query Processing** — Execute aggregations (SUM, AVG, COUNT, MIN, MAX) with configurable error margins and confidence levels
-- **CSV Data Ingestion** — Upload and automatically ingest CSV files into DuckDB
-- **Group-By Analytics** — Perform grouped aggregations with visual feedback
-- **Interactive Query Workbench** — Build and execute queries through an intuitive UI
-- **Real-Time Visualizations** — Charts and dashboards powered by Recharts
-- **System Monitoring** — Track memory usage, active tables, and engine status
+---
+
+## Key Features
+
+- **Approximate Query Processing (AQP)**  
+  Execute `SUM`, `AVG`, `COUNT`, `MIN`, `MAX` with configurable error bounds and confidence levels
+
+- **Exact vs Approximate Comparison**  
+  Side-by-side execution to evaluate speed vs accuracy tradeoffs
+
+- **CSV Data Ingestion Pipeline**  
+  Upload and process large datasets into DuckDB
+
+- **Interactive Query Workbench**  
+  UI-driven query building with execution metadata
+
+- **Statistical Estimation Engine**  
+  Sampling + estimators with confidence-aware outputs
+
+- **System Monitoring**  
+  Track execution time, sampling rate, and engine behavior
 
 ---
 
 ## Tech Stack
 
 ### Backend
-| Technology | Purpose |
-|------------|---------|
-| FastAPI | High-performance Python web framework |
-| DuckDB | In-process analytical database |
-| Pandas | Data manipulation and ingestion |
-| Uvicorn | ASGI server |
-| psutil | System resource monitoring |
+
+- FastAPI (API layer)
+- DuckDB (analytical database)
+- Pandas (data ingestion)
+- Uvicorn (ASGI server)
 
 ### Frontend
-| Technology | Purpose |
-|------------|---------|
-| Next.js 16 | React framework with App Router |
-| React 19 | UI library |
-| Tailwind CSS 4 | Utility-first styling |
-| Recharts | Data visualization |
-| shadcn/ui | Component library |
-| Lucide React | Icon library |
-| Sonner | Toast notifications |
 
----
-
-## Project Structure
-
-```
-insightRush/
-├── backend/                  # FastAPI backend
-│   ├── api/
-│   │   └── routes.py        # API endpoints
-│   ├── core/
-│   │   └── config.py        # Configuration
-│   ├── engine/
-│   │   ├── aqp_engine.py    # AQP query engine
-│   │   ├── estimator.py     # Statistical estimation
-│   │   ├── executor.py      # Query execution
-│   │   ├── sampler.py       # Data sampling
-│   │   └── validator.py     # Query validation
-│   ├── models/
-│   │   └── schemas.py       # Pydantic models
-│   ├── storage/
-│   │   ├── db.py           # Database manager
-│   │   └── ingestion.py    # CSV ingestion
-│   └── main.py             # Application entry
-├── src/                     # Next.js frontend
-│   ├── app/                # App Router pages
-│   │   ├── page.tsx        # Main dashboard
-│   │   ├── layout.tsx      # Root layout
-│   │   └── globals.css     # Global styles
-│   ├── components/         # React components
-│   │   ├── DashboardView.tsx
-│   │   ├── QueryWorkbenchView.tsx
-│   │   ├── ConfigurationView.tsx
-│   │   ├── ComparisonView.tsx
-│   │   ├── Sidebar.tsx
-│   │   └── ui/            # shadcn/ui components
-│   ├── lib/
-│   │   └── utils.ts       # Utility functions
-│   └── types/
-│       └── index.ts       # TypeScript types
-├── data/                   # Sample datasets
-├── tmp_uploads/           # Temporary upload storage
-├── requirements.txt       # Python dependencies
-└── package.json          # Node.js dependencies
-```
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 20+
-- npm or yarn
-
-### Backend Setup
-
-```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate (Windows)
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the server
-uvicorn backend.main:app --reload --port 8000
-```
-
-### Frontend Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
-
-The application will be available at `http://localhost:3000` with the backend API running on `http://localhost:8000`.
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/upload` | Upload CSV file |
-| POST | `/query` | Execute approximate query |
-| GET | `/stats` | Get system statistics |
-
-### Query Request Format
-
-```json
-{
-  "table_name": "table_abc123",
-  "column": "sales",
-  "query_type": "SUM",
-  "target_error": 0.05,
-  "confidence": 0.95,
-  "group_by": "region"
-}
-```
-
----
-
-## Usage
-
-1. **Upload Data** — Drag and drop or select a CSV file to ingest
-2. **Configure Query** — Select table, column, aggregation type, and accuracy parameters
-3. **Execute** — Run approximate or exact queries
-4. **Visualize** — View results with error margins and confidence intervals
-5. **Compare** — Side-by-side comparison of approximate vs exact results
+- Next.js (App Router)
+- React
+- Tailwind CSS
+- Recharts (visualizations)
 
 ---
 
 ## Architecture
 
-The AQP engine uses statistical sampling techniques to provide approximate results with bounded error:
+The AQP engine follows a layered execution model:
 
-1. **Sampling Layer** — Stratified/random sampling of large datasets
-2. **Estimation Layer** — Statistical estimators for aggregates with confidence intervals
-3. **Execution Layer** — Optimized query execution against samples
-4. **Validation Layer** — Query syntax and parameter validation
+1. **Ingestion Layer**  
+   Parses and loads CSV datasets into DuckDB
+
+2. **Validation Layer**  
+   Validates schema, columns, and query parameters
+
+3. **Sampling Layer**  
+   Generates sampled subsets based on accuracy targets
+
+4. **Estimation Layer**  
+   Computes aggregates with statistical guarantees
+
+5. **Execution Layer**  
+   Chooses between exact and approximate execution
 
 ---
 
-## Development
-
-### Running Tests
+## Project Structure
 
 ```bash
-# Backend tests
-pytest backend/
+insightRush/
+├── backend/
+│   ├── api/           # FastAPI routes
+│   ├── engine/        # AQP engine (sampler, estimator, executor)
+│   ├── storage/       # Ingestion + DB handling
+│   └── main.py
+├── src/               # Next.js frontend
+├── data/              # Sample datasets
+├── tmp_uploads/       # Uploaded CSVs
+└── generate_data.py   # Synthetic dataset generator
+````
 
-# Frontend linting
-npm run lint
-```
+---
 
-### Building for Production
+## Running Locally
+
+### Backend
 
 ```bash
-# Build frontend
-npm run build
-
-# Production backend
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn backend.main:app --reload --port 8000
 ```
+
+### Frontend
+
+```bash
+npm install
+npm run dev
+```
+
+App runs on:
+
+* Frontend: http://localhost:3000
+* Backend: http://localhost:8000
+
+---
+
+## Usage
+
+1. Upload a CSV dataset
+2. Select aggregation type (`SUM / AVG / COUNT`)
+3. Configure accuracy target
+4. Execute query
+5. Compare approximate vs exact results
+
+---
+
+## Benchmarking & Scale
+
+* Designed for **local experimentation with large datasets**
+* Supports testing with **synthetic data via `generate_data.py`**
+* Performance depends on:
+
+  * dataset size
+  * sampling rate
+  * system memory and CPU
+
+This project focuses on **query performance tradeoffs**, not production-scale distributed systems.
+
+---
+
+## Security Notes
+
+* Input validation is implemented for schema and query parameters
+* Not production-hardened:
+
+  * No authentication
+  * No rate limiting
+  * Open local usage model
+
+---
+
+## Limitations
+
+* Local deployment only (not hosted)
+* Single-node execution (DuckDB)
+* No persistent multi-user data isolation
+* Limited query types (aggregations only)
+
+---
+
+## Future Improvements
+
+* Add authentication and dataset isolation
+* Introduce query caching
+* Add benchmarking scripts with reproducible results
+* Improve validation and query safety controls
+* Extend to additional query types and joins
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License
 
----
-
-## Acknowledgments
-
-- DataSet can be produced by running generate_data.py script.
-- Built with [FastAPI](https://fastapi.tiangolo.com/) and [Next.js](https://nextjs.org/)
-- Powered by [DuckDB](https://duckdb.org/) for analytical processing
-- UI components from [shadcn/ui](https://ui.shadcn.com/)
+```
+```
