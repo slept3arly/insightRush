@@ -1,6 +1,7 @@
 fastapi
 uvicorn
-pandas
 python-multipart
 duckdb
 psutil
+# pandas and numpy are only needed for generate_data.py (dev script):
+# pip install pandas numpy
