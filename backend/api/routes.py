@@ -1,3 +1,6 @@
+import os
+
+import psutil
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from backend.models.schemas import QueryRequest, QueryResponse
@@ -80,8 +83,6 @@ async def query(req: QueryRequest):
 # -------------------------
 @router.get("/stats")
 async def get_system_stats():
-    import os
-    import psutil
     from backend.storage.db import db_manager
 
     try:

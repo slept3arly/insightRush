@@ -1,5 +1,5 @@
 "use client";
-import { ViewType } from "@/types";
+import { SystemStats, ViewType } from "@/types";
 
 const navItems: { id: ViewType; icon: string; label: string }[] = [
   { id: "dashboard", icon: "dashboard", label: "Dashboard" },
@@ -16,10 +16,14 @@ const bottomItems = [
 export default function Sidebar({
   activeView,
   setActiveView,
+  systemStats,
 }: {
   activeView: ViewType;
   setActiveView: (v: ViewType) => void;
+  systemStats: SystemStats | null;
 }) {
+  const isOnline = systemStats !== null && systemStats.engine_status !== "OFFLINE";
+
   return (
     <aside
       className="w-[240px] flex flex-col h-screen shrink-0"
@@ -45,9 +49,9 @@ export default function Sidebar({
 
       {/* Status Bar */}
       <div className="mx-4 mb-4 px-3 py-2 flex items-center gap-2" style={{ background: "var(--surface-container)" }}>
-        <div className="pulse-indicator-green" />
-        <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--tertiary-green)" }}>
-          System Operational
+        <div className={isOnline ? "pulse-indicator-green" : "pulse-indicator"} style={!isOnline ? { background: "var(--error-red)", boxShadow: "0 0 8px var(--error-red)" } : undefined} />
+        <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: isOnline ? "var(--tertiary-green)" : "var(--error-red)" }}>
+          {isOnline ? "System Operational" : "System Offline"}
         </span>
       </div>
 
@@ -81,7 +85,9 @@ export default function Sidebar({
           <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--on-surface-variant)" }}>Status</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--tertiary-green)" }}>Online</span>
+          <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: isOnline ? "var(--tertiary-green)" : "var(--error-red)" }}>
+            {isOnline ? "Online" : "Offline"}
+          </span>
         </div>
       </div>
     </aside>

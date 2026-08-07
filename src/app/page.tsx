@@ -318,7 +318,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--surface)" }}>
-      <Sidebar activeView={activeView} setActiveView={setActiveView} />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} systemStats={systemStats} />
       <main className="flex-1 overflow-y-auto" style={{ background: "var(--surface)" }}>
         {activeView === "dashboard" && (
           <DashboardView
