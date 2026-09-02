@@ -66,6 +66,5 @@ venv/
 *.swp
 *.swo
 
-# logs
-logs/
-*.log
+# Graphify generated analysis
+graphify-out/
