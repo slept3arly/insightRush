@@ -2,6 +2,7 @@ import os
 import uuid
 
 from .db import db_manager
+from backend.engine.validator import Validator
 
 TMP_DIR = "tmp_uploads"
 os.makedirs(TMP_DIR, exist_ok=True)
@@ -24,4 +25,5 @@ def ingest_csv(file_bytes, filename):
     FROM read_csv_auto('{path}')
 """)
 
+    Validator.invalidate_cache()
     return table_name

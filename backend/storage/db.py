@@ -5,9 +5,10 @@ import os
 class DuckDBManager:
     def __init__(self):
         # -------------------------
-        # ABSOLUTE PATH (FIXED)
+        # DYNAMIC PATH WITH ENV FALLBACK
         # -------------------------
-        DB_DIR = r"C:\Development\Projects\insightRushDB\db_data"
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        DB_DIR = os.getenv("DB_DIR", os.path.join(project_root, "db_data"))
 
         os.makedirs(DB_DIR, exist_ok=True)
 

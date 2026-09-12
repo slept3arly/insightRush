@@ -8,6 +8,11 @@ class Validator:
     _last_refresh = 0
     _ttl_seconds = 60  # refresh every 60s
 
+    @classmethod
+    def invalidate_cache(cls):
+        cls._schema_cache = None
+        cls._last_refresh = 0
+
     # -------------------------
     # LOAD SCHEMA (CACHED)
     # -------------------------

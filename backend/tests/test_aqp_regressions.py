@@ -126,6 +126,50 @@ class AQPRegressionTests(unittest.TestCase):
         self.assertEqual(approx_response["mode"], "approx")
         self.assertAlmostEqual(approx_response["meta"]["sample_fraction"], 0.125)
 
+    def test_schema_cache_invalidated_on_ingest(self):
+        # Warm the cache
+        Validator._get_schema()
+        self.assertIsNotNone(Validator._schema_cache)
+
+        # Ingest a new table
+        table_name = ingest_csv(Path("data/sample.csv").read_bytes(), "sample.csv")
+        self.created_tables.append(table_name)
+
+        # Immediate validation without manual cache clearing should succeed
+        req = QueryRequest(table_name=table_name, query_type="COUNT")
+        self.assertTrue(Validator.validate_query(req))
+
+    def test_purge_sample_tables(self):
+        # Materialize a sample table
+        sample_name = Sampler.materialize_sample(self.large_table, 0.1)
+        self.assertTrue(Sampler.is_sample_table(sample_name))
+
+        # Purge sample tables
+        purged = Sampler.purge_sample_tables(self.large_table)
+        self.assertGreater(purged, 0)
+
+        # Verify sample table no longer exists
+        tables = [t[0] for t in self.conn.execute("SHOW TABLES").fetchall()]
+        self.assertNotIn(sample_name, tables)
+
+    def test_approx_grouped_query_returns_error_margin(self):
+        res = self.engine.run_query(
+            table=self.large_table,
+            column="amount",
+            query_type="SUM",
+            target_error=0.2,
+            group_by="country",
+            confidence=0.95,
+            include_execution=True,
+        )
+
+        self.assertEqual(res["mode"], "approx")
+        self.assertIn("error_margin", res)
+        self.assertIsNotNone(res["error_margin"])
+        self.assertIn("US", res["result"])
+        self.assertIn("IN", res["result"])
+        self.assertIn("UK", res["result"])
+
 
 if __name__ == "__main__":
     unittest.main()

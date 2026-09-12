@@ -274,9 +274,9 @@ export default function QueryWorkbenchView(props: Props) {
             <h3 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif", color: "var(--on-surface)" }}>
               Performance Comparison
             </h3>
-            <div className="h-56" style={{ minWidth: 0, minHeight: 0 }}>
+            <div className="h-56 w-full">
               {results ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100} initialDimension={{ width: 500, height: 220 }}>
                   <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid stroke="rgba(64,72,93,0.15)" vertical={false} />
                     <XAxis dataKey="name" tick={{ fill: "#a3aac4", fontSize: 11 }} axisLine={false} tickLine={false} />

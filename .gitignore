@@ -26,6 +26,7 @@
 
 # data files
 data/
+db_data/
 **/*.csv
 *.db
 *.duckdb
