@@ -152,7 +152,6 @@ export default function Home() {
         target_error: 0,
       };
 
-      await axios.post(`${API_BASE}/query`, exactPayload);
       const exactStart = performance.now();
       const exactRes = await axios.post(`${API_BASE}/query`, exactPayload);
       const exactEnd = performance.now();
@@ -171,7 +170,6 @@ export default function Home() {
           target_error: targetError,
         };
 
-        await axios.post(`${API_BASE}/query`, payload);
         const tsStart = performance.now();
         const res = await axios.post(`${API_BASE}/query`, payload);
         const tsEnd = performance.now();
@@ -237,9 +235,6 @@ export default function Home() {
         group_by: groupBy || null,
         target_error: 0,
       };
-
-      await axios.post(`${API_BASE}/query`, payload);
-      await axios.post(`${API_BASE}/query`, exactPayload);
 
       const approxStart = performance.now();
       const res = await axios.post(`${API_BASE}/query`, payload);
@@ -357,7 +352,7 @@ export default function Home() {
           />
         )}
 
-        {activeView === "configuration" && <ConfigurationView />}
+        {activeView === "configuration" && <ConfigurationView systemStats={systemStats} />}
       </main>
     </div>
   );

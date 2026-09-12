@@ -49,6 +49,8 @@ async def query(req: QueryRequest):
             return {
                 "mode": execution["mode"],
                 "result": result,
+                "error_margin": execution.get("error_margin"),
+                "confidence": execution.get("confidence"),
                 "meta": {
                     "table": req.table_name,
                     "query_type": req.query_type,
@@ -87,9 +89,16 @@ async def get_system_stats():
 
     try:
         process = psutil.Process(os.getpid())
-        mem_info = process.memory_info()
+        py_mem_bytes = process.memory_info().rss
 
         conn = db_manager.get_connection()
+        try:
+            duckdb_mem_bytes = conn.execute("SELECT sum(memory_usage_bytes) FROM duckdb_memory()").fetchone()[0] or 0
+        except Exception:
+            duckdb_mem_bytes = 0
+
+        total_mem_mb = round((py_mem_bytes + duckdb_mem_bytes) / (1024 * 1024), 2)
+
         tables = conn.execute("SHOW TABLES").fetchall()
         base_tables = [table for table in tables if not Sampler.is_sample_table(table[0])]
         sample_tables = [table for table in tables if Sampler.is_sample_table(table[0])]
@@ -100,10 +109,23 @@ async def get_system_stats():
 
         return {
             "active_tables": len(base_tables),
-            "memory_usage_mb": round(mem_info.rss / (1024 * 1024), 2),
+            "memory_usage_mb": total_mem_mb,
             "engine_status": "AQP_OPTIMIZED",
             "total_cached_rows": total_cached_rows
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------------------------
+# Cache Purge
+# -------------------------
+@router.post("/cache/purge")
+async def purge_cache(table_name: str = None):
+    try:
+        count = Sampler.purge_sample_tables(table_name)
+        return {"status": "success", "purged_sample_tables": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

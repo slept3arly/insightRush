@@ -1,6 +1,8 @@
+import math
 from .planner import Planner
 from .executor import Executor
 from .estimator import (
+    get_z,
     estimate_count,
     estimate_sum_from_stats,
     estimate_avg_from_stats,
@@ -29,13 +31,26 @@ class AQPEngine:
 
         return results
 
-    def _finalize_result(self, result, mode: str, sample_fraction: float, include_execution: bool):
+    def _finalize_result(
+        self,
+        result,
+        mode: str,
+        sample_fraction: float,
+        include_execution: bool,
+        error_margin=None,
+        confidence=None,
+    ):
         if include_execution:
-            return {
+            res = {
                 "mode": mode,
                 "sample_fraction": sample_fraction,
                 "result": result,
             }
+            if error_margin is not None:
+                res["error_margin"] = error_margin
+            if confidence is not None:
+                res["confidence"] = confidence
+            return res
 
         return result
 
@@ -132,24 +147,94 @@ class AQPEngine:
         sample_table = Sampler.materialize_sample(table, p)
 
         if group_by:
-            agg_expr = {
-                "SUM": f"SUM({column})",
-                "COUNT": "COUNT(*)",
-                "AVG": f"AVG({column})",
-            }[query_type]
+            results = {}
+            total_variance = 0.0
 
-            sql = f"""
-                SELECT
-                    {group_by} as grp,
-                    {agg_expr} as agg
-                FROM {sample_table}
-                GROUP BY {group_by}
-            """
+            if query_type == "COUNT":
+                sql = f"""
+                    SELECT {group_by} as grp, COUNT(*) as n
+                    FROM {sample_table}
+                    GROUP BY {group_by}
+                """
+                rows = Executor.run(sql)
+                if isinstance(rows, dict):
+                    rows = [rows]
 
-            rows = Executor.run(sql)
-            scale_factor = 1 / p if query_type in ["SUM", "COUNT"] else 1.0
-            result = self._grouped_result_map(rows, "agg", scale_factor)
-            return self._finalize_result(result, mode, sample_fraction, include_execution)
+                for row in rows:
+                    if row.get("grp") is None:
+                        continue
+                    n = row["n"] or 0
+                    est = estimate_count(n, p, confidence)
+                    results[row["grp"]] = float(est["estimate"])
+                    if est["error_margin"]:
+                        total_variance += (est["error_margin"] / get_z(confidence)) ** 2
+
+            elif query_type == "SUM":
+                sql = f"""
+                    SELECT
+                        {group_by} as grp,
+                        COUNT(*) as n,
+                        AVG({column}) as mean,
+                        VAR_SAMP({column}) as var
+                    FROM {sample_table}
+                    GROUP BY {group_by}
+                """
+                rows = Executor.run(sql)
+                if isinstance(rows, dict):
+                    rows = [rows]
+
+                for row in rows:
+                    if row.get("grp") is None:
+                        continue
+                    n = row["n"] or 0
+                    mean = row["mean"] or 0.0
+                    var = row["var"] or 0.0
+                    est = estimate_sum_from_stats(n, mean, var, p, confidence)
+                    results[row["grp"]] = float(est["estimate"])
+                    if est["error_margin"]:
+                        total_variance += (est["error_margin"] / get_z(confidence)) ** 2
+
+            elif query_type == "AVG":
+                sql = f"""
+                    SELECT
+                        {group_by} as grp,
+                        COUNT(*) as n,
+                        AVG({column}) as mean,
+                        VAR_SAMP({column}) as var
+                    FROM {sample_table}
+                    GROUP BY {group_by}
+                """
+                rows = Executor.run(sql)
+                if isinstance(rows, dict):
+                    rows = [rows]
+
+                total_n = 0
+                for row in rows:
+                    if row.get("grp") is None:
+                        continue
+                    n = row["n"] or 0
+                    mean = row["mean"] or 0.0
+                    var = row["var"] or 0.0
+                    est = estimate_avg_from_stats(n, mean, var, confidence, fraction=p)
+                    results[row["grp"]] = float(est["estimate"])
+                    if est["error_margin"]:
+                        group_var = (est["error_margin"] / get_z(confidence)) ** 2
+                        total_variance += group_var * (n ** 2)
+                        total_n += n
+
+                if total_n > 0:
+                    total_variance = total_variance / (total_n ** 2)
+
+            Z = get_z(confidence)
+            total_error_margin = Z * math.sqrt(total_variance) if total_variance > 0 else 0.0
+            return self._finalize_result(
+                results,
+                mode,
+                sample_fraction,
+                include_execution,
+                error_margin=total_error_margin,
+                confidence=confidence,
+            )
 
         if query_type == "COUNT":
             sql = f"""
