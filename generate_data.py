@@ -1,21 +1,42 @@
-import pandas as pd
+
+from pathlib import Path
+
 import numpy as np
-import os
+import pandas as pd
 
-filename = 'test_data_10m.csv'
-n_total = 100_000_000
-chunk_size = 10_000_000  # Process 1 million rows at a time
+TOTAL_ROWS = 10_000_000
+CHUNK_SIZE = 1_000_000
+OUTPUT_FILE = Path("data/test_data_10m.csv")
+SEED = 42
 
-for i in range(0, n_total, chunk_size):
-    df = pd.DataFrame({
-        'category': np.random.choice(['A', 'B', 'C', 'D', 'E'], chunk_size),
-        'sub_category': np.random.randint(1, 100, chunk_size),
-        'value': np.random.normal(100, 20, chunk_size)
-    })
-    
-    # Header only for the first chunk
-    mode = 'w' if i == 0 else 'a'
-    header = True if i == 0 else False
-    
-    df.to_csv(filename, mode=mode, index=False, header=header)
-    print(f"Finished writing {i + chunk_size} rows...")
+def main():
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(SEED)
+    categories = np.array(["A", "B", "C", "D", "E"])
+
+    OUTPUT_FILE.unlink(missing_ok=True)
+
+    for start in range(0, TOTAL_ROWS, CHUNK_SIZE):
+        rows = min(CHUNK_SIZE, TOTAL_ROWS - start)
+
+        df = pd.DataFrame({
+            "category": categories[rng.integers(0, 5, size=rows)],
+            "sub_category": rng.integers(1, 100, size=rows),
+            "value": rng.normal(100, 20, size=rows),
+        })
+
+        df.to_csv(
+            OUTPUT_FILE,
+            mode="w" if start == 0 else "a",
+            index=False,
+            header=(start == 0),
+            float_format="%.4f",
+        )
+
+        completed = start + rows
+        print(f"\rGenerated {completed:,}/{TOTAL_ROWS:,} rows", end="", flush=True)
+
+    print(f"\nDone: {OUTPUT_FILE.resolve()}")
+
+if __name__ == "__main__":
+    main()
